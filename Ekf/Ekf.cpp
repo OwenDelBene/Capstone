@@ -1,11 +1,10 @@
-#include "linearAlgebra.h"
 #include "Ekf.h"
 #include "cmath"
 void accelModel(double x[4], double dest[3])
 {
   dest[0] = -2 * (x[1]*x[3]-x[0]*x[2]);
   dest[1] = -2 * (x[0]*x[1]+x[2]*x[3]);
-  dest[2] = -(1-2)*(x[1]*x[1] + x[2]*x[2]);
+  dest[2] = -1 +2*(x[1]*x[1] + x[2]*x[2]);
 
 }
 
@@ -15,15 +14,15 @@ void magModel(double declination, double x[4], double dest[3])
   double s = sin(declination);
   double c = cos(declination);
 
-  v3Set(s * (2*x[0]*x[3] + 2*x[1]*x[2]) - c*(2*x[2]*x[2] + x[3]*x[3] -1),
-        -c*(2*x[0]*x[3] -2*x[1]*x[2] - s*(2*x[1]*x[1] + 2*x[3]*x[3]-1)),
+  v3Set(s * (2*x[0]*x[3] + 2*x[1]*x[2]) - c*(2*x[2]*x[2] + 2*x[3]*x[3] -1),
+        -c*(2*x[0]*x[3] -2*x[1]*x[2]) - s*(2*x[1]*x[1] + 2*x[3]*x[3]-1),
        c*(2*x[0]*x[2]+2*x[1]*x[3]) - s*(2*x[0]*x[1] -2*x[2]*x[3]) ,dest);
 
 }
 
 
 
-static void stateTransition(ekfData* info, double* x, size_t n, double t, double* res)
+void stateTransition(ekfData* info, double* x, size_t n, double t, double* res)
 {
   double qdot[4];
   double H[3];
@@ -37,8 +36,8 @@ static void stateTransition(ekfData* info, double* x, size_t n, double t, double
   v3Cross(x+4, H, cx);
   //subtract Tctrl here if using above imu
   v3Scale(-1, cx, cx);
-
-  m33MultV3(info->MOI, cx, res + 4);
+  m33MultV3(info->MOI_inv, cx, res + 4);
+  //v3Set(0, 0, 0, res+4);
 }
 
 
@@ -63,7 +62,7 @@ void OmegaQ(double q[4], double dest[4][3])
   dest[0][1] = -q[2];
   dest[0][2] = -q[3];
 
-  dest[1][0] =  q[1];
+  dest[1][0] =  q[0];
   dest[1][1] = -q[3];
   dest[1][2] =  q[2];
    
@@ -90,7 +89,7 @@ void OmegaW(double w[3], double dest[4][4])
   dest[1][3] = -w[1];
 
   dest[2][0] =  w[1];
-  dest[2][1] = -w[3];
+  dest[2][1] = -w[2];
   dest[2][2] =  0;
   dest[2][3] =  w[0];
   
@@ -135,9 +134,9 @@ void observation(double x[7], double declination, double dest[6][7])
 
 
   dest[3][0] =  2*x[3]*s;
-  dest[3][1] = -2*x[2]*s;
+  dest[3][1] =  2*x[2]*s;
   dest[3][2] =  2*x[1]*s-4*x[2]*c;
-  dest[3][3] = -2*x[0]*s-4*x[3]*c;
+  dest[3][3] =  2*x[0]*s-4*x[3]*c;
   dest[3][4] =  0;
   dest[3][5] =  0;
   dest[3][6] =  0;
@@ -152,13 +151,13 @@ void observation(double x[7], double declination, double dest[6][7])
   dest[4][6] =  0;
 
 
-  dest[0][0] =  2*x[2]*c-2*x[1]*s;
-  dest[0][1] =  2*x[3]*c-2*x[0]*s;
-  dest[0][2] =  2*x[0]*c+2*x[3]*s;
-  dest[0][3] =  2*x[1]*c+2*x[2]*s;
-  dest[0][4] =  0;
-  dest[0][5] =  0;
-  dest[0][6] =  0;
+  dest[5][0] =  2*x[2]*c-2*x[1]*s;
+  dest[5][1] =  2*x[3]*c-2*x[0]*s;
+  dest[5][2] =  2*x[0]*c+2*x[3]*s;
+  dest[5][3] =  2*x[1]*c+2*x[2]*s;
+  dest[5][4] =  0;
+  dest[5][5] =  0;
+  dest[5][6] =  0;
 
 }
 
@@ -170,16 +169,20 @@ void rk4(void (*fun_ptr)(ekfData*, double*, size_t, double, double*),ekfData* in
 	double k3[7] /*= (double*) malloc(n*sizeof(double))*/;
 	double k4[7] /*= (double*) malloc(n*sizeof(double))*/;
 
+  vSetZero(k1, 7);
+  vSetZero(k2, 7);
+  vSetZero(k3, 7);
+  vSetZero(k4, 7);
 	
 	
 	fun_ptr(info, x, n, t, k1);
 
 	vScale(.5*dt, k1, n, k2);
-	vAdd(k1, n, x, k2);
+	vAdd(k2, n, x, k2);
 	fun_ptr(info, k2, n, t + .5 * dt, k2);
 	
 	vScale(.5*dt, k2, n, k3);
-	vAdd(k3, n, x, k2);
+	vAdd(k3, n, x, k3);
 	fun_ptr(info, k3, n, t, k3);
 
 
@@ -187,7 +190,9 @@ void rk4(void (*fun_ptr)(ekfData*, double*, size_t, double, double*),ekfData* in
 	vAdd(k4, n, x, k4);
 	fun_ptr(info, k4, n, t, k4);
 
-	vScale(2, k2, n, k2);
+	
+  
+  vScale(2, k2, n, k2);
 	vScale(2, k3, n, k3);
 
 	vAdd(k1, n, k2, k2);
@@ -218,13 +223,41 @@ void covarianceTransition(double t, double Pp[][7], double x[7], ekfData* ekf, d
   double F[7][7];
   double Finv[7][7];
   double P1[7][7];
+  double P2[7][7];
+
+  for (int i=0; i<4; i++) {
+    for (int j=0; j<4; j++) {
+      F[i][j] = .5* Ow[i][j];
+    }
+  }
+  
+  for (int i=0; i<4; i++) {
+    for (int j=0; j<3; j++) {
+      F[i][j+4] = .5* Oq[i][j];
+    }
+  }
+
+  for (int i=0; i<3; i++) {
+    for (int j=0; j<4; j++) {
+      F[i+4][j] = 0;
+    }
+  }
+  
+  for (int i=0; i<3; i++) {
+    for (int j=0; j<3; j++) {
+      F[i+4][j+4] = dw[i][j];
+    }
+  }
+
+
+
 
   mMultM(F, 7, 7, Pp, 7, 7, P1);
-  mInverse(F, 7, Finv);
-  mMultM(Pp, 7, 7, Finv, 7, 7, Pp);
-  mAdd(Pp, 7, 7, P1, Pp);
-  mAdd(Pp, 7, 7, ekf->Q, Pdot);
-  
+  mTranspose(F, 7,7,  Finv);
+  mMultM(Pp, 7, 7, Finv, 7, 7, P2);
+  mAdd(P2, 7, 7, P1, P2);
+  mAdd(P2, 7, 7, ekf->Q, Pdot);
+   
   
 
 }
@@ -234,9 +267,11 @@ void predict(double xp[7], double Pp[][7], ekfData* ekf, double dt, double x[7],
   rk4(stateTransition, ekf, xp, 7, 0, dt, x );
 
   vNormalize(xp, 4, xp);
+  double Pdot[7][7];
+  covarianceTransition(0, Pp, x, ekf, Pdot);
+  mScale(dt,Pdot, 7, 7, Pdot);
+  mAdd(Pp, 7, 7, Pdot, P);
 
-  covarianceTransition(0, Pp, xp, ekf, P);
-  mAdd(Pp, 7, 7, P, P);
 }
 
 
@@ -273,19 +308,19 @@ void update(double xp[7], double Pp[7][7], double y[6], ekfData* ekf, double x[7
   //get P
   mMultM(K, 7, 6, H, 6, 7, KH);
   mSubtract(PI, 7, 7, KH, KH);
-  mAdd(KH, 7, 7, Pp, P);
+  mMultM(KH, 7, 7, Pp, 7, 7,  P);
 
 
   //get x
-  magModel(declination, xp, z);
-  accelModel(xp, z+3);
+  accelModel(xp, z);
+  magModel(declination, xp, z+3);
 
 
   vSubtract(y, 6, z, residual);
   mMultV(K, 7, 6, residual, x1);
 
   vAdd(xp, 7, x1, x);
-  //check this
+  
   vNormalize(x, 4, x);
 
 
@@ -310,12 +345,15 @@ void ekf_init(ekfData* ekf, double x[7], double P[7][7])
 {
   double Qv[] = {1e-6, 1e-6, 1e-6, 1e-5, 1e-5, 1e-5, 1e-5};
   double Rv[] = {.045, .045, .045, .015, .015, .015};
+  double MOI[] = {1.0, 1.0, 1.0};
   mDiag(Qv, 7, ekf->Q);
   mDiag(Rv, 6, ekf->R);
+  mDiag(MOI, 3, ekf->MOI);
+  mInverse(ekf->MOI, 3, ekf->MOI_inv);
   double a = (.5 * M_PI/180);
-  a*=a;
+  a*=a * 10;
   double b = (.3 * M_PI/180);
-  b*=b;
+  b*=b * 10;
   double Pv[] = {3*a, 3*a, b, b, b, b, b, b};
   mDiag(Pv, 7, P);
 

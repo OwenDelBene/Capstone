@@ -272,9 +272,13 @@ extern "C" {
 	void dAdq2(double q[4], double m[3][3]);
 	void dAdq3(double q[4], double m[3][3]);
 	void dAdq4(double q[4], double m[3][3]);
-    void threeRot(double m[3][3], double val);
-    void twoRot(double m[3][3], double val);
-    void oneRot(double m[3][3], double val);
+  void threeRot(double m[3][3], double val);
+  void twoRot(double m[3][3], double val);
+  void oneRot(double m[3][3], double val);
+  void quat2Eul(double q[4], double eul[3]);
+  void eul2Quat(double roll, double pitch, double yaw, double q[4]); 
+  void quatConj(double q[4], double conj[4]);
+  void quatMultiply(double q1[4], double q2[4], double qout[4]);
 #ifdef __cplusplus
 }
 #endif

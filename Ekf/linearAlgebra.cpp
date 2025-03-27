@@ -2909,3 +2909,91 @@ void oneRot(double m[3][3], double val) {
             0, -sv, cv, m);
 
 }
+
+void quat2Eul(double q[4], double eul[3]) {
+
+    // roll (x-axis rotation)
+    /* 
+    double sinr_cosp = 2 * (q[0] * q[1] + q[2] * q[3]);
+    double cosr_cosp = 1 - 2 * (q[1] * q[1] + q[2] * q[2]);
+    eul[0] = std::atan2(sinr_cosp, cosr_cosp);
+
+    // pitch (y-axis rotation)
+    double sinp = std::sqrt(1 + 2 * (q[0] * q[1] - q[1] * q[3]));
+    double cosp = std::sqrt(1 - 2 * (q[0] * q[2] - q[1] * q[3]));
+    eul[1] = 2 * std::atan2(sinp, cosp) - M_PI / 2;
+
+    // yaw (z-axis rotation)
+    double siny_cosp = 2 * (q[0] * q[3] + q[1] * q[2]);
+    double cosy_cosp = 1 - 2 * (q[2] * q[2] + q[3] * q[3]);
+    eul[2] = std::atan2(siny_cosp, cosy_cosp);
+    */
+    //v3Set(atan2( 2*(q[1]*q[2]+q[0]*q[3]), q[0]*q[0] + q[1]*q[1] - q[2]*q[2] - q[3]*q[3] ), 
+    //        asin( -2*(q[1]*q[3]-q[0]*q[2]) ), 
+    //        atan2( 2*(q[2]*q[3]+q[0]*q[1]), q[0]*q[0] - q[1]*q[1] - q[2]*q[2] + q[3]*q[3] ), eul);
+    
+    double sr_cp = 2* (q[0] *q[1] + q[2]*q[3]);
+    double cr_cp = 1- 2*(q[1] * q[1] + q[2] * q[2]);
+
+    double sp = sqrt(1 + 2*(q[0]*q[2] - q[1]*q[3]));
+    double cp = sqrt(1 - 2*(q[0]*q[2] - q[1]*q[3]));
+
+    double sy_cp = 2 * (q[0] * q[3] + q[1] * q[2]);
+    double cy_cp = 1 - 2*(q[2]*q[2] + q[3]*q[3]);
+    v3Set (
+        atan2(sr_cp, cr_cp),
+        2* atan2(sp, cp) - M_PI/2,
+        atan2(sy_cp, cy_cp),
+        eul);
+}
+
+
+void eul2Quat(double roll, double pitch, double yaw, double q[4]) 
+{
+  /*
+    double cr = cos(roll * 0.5);
+    double sr = sin(roll * 0.5);
+    double cp = cos(pitch * 0.5);
+    double sp = sin(pitch * 0.5);
+    double cy = cos(yaw * 0.5);
+    double sy = sin(yaw * 0.5);
+
+    q[0] = cr * cp * cy + sr * sp * sy;
+    q[1] = sr * cp * cy - cr * sp * sy;
+    q[2] = cr * sp * cy + sr * cp * sy;
+    q[3] = cr * cp * sy - sr * sp * cy;
+*/
+
+    double cr = cos(roll*.5);
+    double sr = sin(roll*.5);
+    double cp = cos(pitch*.5);
+    double sp = sin(pitch*.5);
+    double cy = cos(yaw*.5);
+    double sy = sin(yaw*.5);
+    v4Set(
+        cr*cp*cy + sr*sp*sy,
+        sr*cp*cy - cr*sp*sy,
+        cr*sp*cy + sr*cp*sy,
+        cr*cp*sy - sr*sp*cy
+        , q);
+
+
+}
+
+void quatConj(double q[4], double conj[4]) {
+  v3Scale(-1, q+1, conj+1);
+  conj[0] = q[0];
+
+}
+void quatMultiply(double p[4], double q[4], double qout[4]) {
+    v4Set(
+        p[0]*q[0] - p[1]*q[1] - p[2]*q[2] - p[3]*q[3],
+        p[0]*q[1] + p[1]*q[0] + p[2]*q[3] - p[3]*q[2],
+        p[0]*q[2] - p[1]*q[3] + p[2]*q[0] + p[3]*q[1],
+        p[0]*q[3] + p[1]*q[2] - p[2]*q[1] + p[3]*q[0]
+      ,qout);
+}
+
+
+
+
