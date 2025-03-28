@@ -26,6 +26,17 @@ using std::thread;
 #include "icm20948.h"
 #endif
 
+#if PID_ENABLE
+#include "pid.h"
+#endif
+
+#if INV_ENABLE
+#include "linearAlgebra.h"
+#endif
+
+#if SERVO_ENABLE
+#include "PCA9685.h"
+#endif
 
 #define PORT 8081
 
@@ -185,13 +196,18 @@ char* parse(char line[], const char symbol[])
 
 void ekfThreadFunction(vector<char>* q) {
 
+  vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
+  double eul[] = {0, 0, 0};
+  double pwm_des[] = {0, 0, 0};
+  double pwm_meas[] = {0, 0, 0};
+  double dt = 1;
 #if EKF_ENABLE 
   ekfData ekf;
-  vector<double> x(7);
   double P[7][7];
   ekf_init(&ekf, x.data(), P);
 #endif 
+
 #if IMU_ENABLE 
  ICM20948 imu;
  const IMUData* data; 
@@ -199,6 +215,25 @@ void ekfThreadFunction(vector<char>* q) {
     printf("Imu not detected");
  }
 #endif
+
+#if SERVO_ENABLE
+  PCA9685 pca("/dev/i2c-0", 0xFF); //TODO address
+#endif 
+
+
+#if PID_ENABLE
+PIDController pid;
+float kp = .1;
+float ki = .2;
+float kd = .3;
+float lpf = 0.01f; //low pass filter coeff
+float max = 2.0f;
+float min = -max;
+
+PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
+
+#endif 
+
   while (q->size() == 0) {
 #if IMU_ENABLE 
   data = &imu.imuDataGet();
@@ -215,6 +250,34 @@ void ekfThreadFunction(vector<char>* q) {
 #if EKF_ENABLE 
     ekf_step(x.data(), P, &ekf, y, dt, x.data(), P);  
 #endif
+#if INV_ENABLE
+  quat2Eul(x.data(), eul);
+#endif
+#if SERVO_ENABLE
+  for (int i=0; i<3; i++) {
+    pca.setPWM(i, pwm_des[i]); //TODO check led value
+  }
+  //Do i need to sleep?
+  for (int i=0; i<3; i++) {
+    pwm_meas[i] = pca.getPWM(i);
+  }
+#endif
+#if PID_ENABLE
+    //This either needs to be before SERVO, or need to copy servo below
+    for (int i=0; i<3; i++) {
+      pwm_des[i] = PIDUpdate(&pid, pwm_des[i], pwm_meas[i]);
+    }
+#endif
+#if SERVO_ENABLE
+  for (int i=0; i<3; i++) {
+    pca.setPWM(i, pwm_des[i]); //TODO check led value
+  }
+  //Do i need to sleep?
+  for (int i=0; i<3; i++) {
+    pwm_meas[i] = pca.getPWM(i);
+  }
+#endif
+
 
   printf("ekf iteration\n");
   std::this_thread::sleep_for(std::chrono::seconds(1));

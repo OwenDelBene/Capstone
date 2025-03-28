@@ -1,1 +1,1 @@
-../../ICM20948-linux-i2c/src/ahrs/madgwick_ahrs.cpp
+../../ICM20948-linux-i2c/src/madgwick_ahrs.cpp
