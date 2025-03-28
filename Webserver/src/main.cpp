@@ -32,6 +32,9 @@ using std::thread;
 
 #if INV_ENABLE
 #include "linearAlgebra.h"
+#include "KDTree.h"
+
+#define INVERSE_KINEMATICS_DB_FILEPATH "inverse_kinematics.db"
 #endif
 
 #if SERVO_ENABLE
@@ -47,6 +50,8 @@ int send_message(int fd, char image_path[], char head[]);
 char http_header[25] = "HTTP/1.1 200 Ok\r\n";
 
 void ekfThreadFunction(vector<char>* q);
+
+
 
 int main(int argc, char const *argv[])
 {
@@ -199,7 +204,7 @@ void ekfThreadFunction(vector<char>* q) {
   vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
   double eul[] = {0, 0, 0};
-  double pwm_des[] = {0, 0, 0};
+  float pwm_des[] = {0, 0, 0};
   double pwm_meas[] = {0, 0, 0};
   double dt = 1;
 #if EKF_ENABLE 
@@ -234,6 +239,15 @@ PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
 
 #endif 
 
+#if INV_ENABLE
+
+  KDTree<2, 3> tree;
+  fillTree(&tree, INVERSE_KINEMATICS_DB_FILEPATH);
+
+#endif
+
+
+
   while (q->size() == 0) {
 #if IMU_ENABLE 
   data = &imu.imuDataGet();
@@ -252,6 +266,10 @@ PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
 #endif
 #if INV_ENABLE
   quat2Eul(x.data(), eul);
+  array<Angle_Type, 2>angles = {eul[0], eul[1]};
+  if (! tree.search(angles, pwm_des)) {
+      printf("Could not find solution for inverse kinematics\n");
+  } 
 #endif
 #if SERVO_ENABLE
   for (int i=0; i<3; i++) {
@@ -285,6 +303,11 @@ PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
   printf("EKF disabled\n");
 
 }
+
+
+
+
+
 char* parse_method(char line[], const char symbol[])
 {
     char *copy = (char *)malloc(strlen(line) + 1);

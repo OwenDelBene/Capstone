@@ -2,10 +2,10 @@ TARGET := ALARS_Server
 
 PI_ENABLE=0
 EKF_ENABLE=1
-IMU_ENABLE=1
-PID_ENABLE=1
-SERVO_ENABLE=1
-INV_ENABLE=1
+IMU_ENABLE=0
+PID_ENABLE=0
+SERVO_ENABLE=0
+INV_ENABLE=0
 
 
 
@@ -27,7 +27,6 @@ CXX_FLAGS:=-I ./src/ -DPI_ENABLE=$(PI_ENABLE) \
 										 -DINV_ENABLE=$(INV_ENABLE)
 
 SRCS:= $(shell find $(SRC_DIR) -name '*.cpp')
-SRCS+= $(shell find ./src/ahrs -name '*.cpp')
 OBJS := $(SRCS:src/%.cpp=$(BUILD_DIR)/%.o)
 .PHONY: all
 all: $(TARGET)
