@@ -23,7 +23,7 @@ endif()
 include_directories(src)
 
 # Build the actual library
-add_library(ICM20948 SHARED src/ahrs/ahrs_math.cpp src/ahrs/madgwick_ahrs.cpp src/ahrs/simple_ahrs.cpp src/icm20948.cpp)
+add_library(ICM20948 SHARED src/ahrs_math.cpp src/madgwick_ahrs.cpp src/simple_ahrs.cpp src/icm20948.cpp)
 
 # add the test application
 add_executable(test_icm20948 tests/icm20948_app.cpp)

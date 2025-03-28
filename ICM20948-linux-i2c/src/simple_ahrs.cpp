@@ -7,8 +7,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include <cmath>
-#include "ahrs/ahrs_math.h"
-#include "ahrs/simple_ahrs.h"
+#include "ahrs_math.h"
+#include "simple_ahrs.h"
 
 #define Kp 4.50f   // proportional gain governs rate of convergence to accelerometer/magnetometer
 #define Ki 1.0f    // integral gain governs rate of convergence of gyroscope biases

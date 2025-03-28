@@ -16,8 +16,8 @@
 // Header files
 
 #include <cmath>
-#include "ahrs/ahrs_math.h"
-#include "ahrs/madgwick_ahrs.h"
+#include "ahrs_math.h"
+#include "madgwick_ahrs.h"
 
 //---------------------------------------------------------------------------------------------------
 // Variable definitions
