@@ -5,7 +5,9 @@
  * Created on 07 July 2017, 17:13
  */
 #include <stdio.h>
+#if PI_ENABLE
 #include <pigpio.h>
+#endif
 #include <unistd.h>
 #include "PiMotor.h"
 
@@ -26,6 +28,7 @@ void PiMotor::setDebug(bool debug) {
 }
 
 void PiMotor::stop() {
+#if PI_ENABLE
     //Initialise GPIO.
     if (gpioInitialise() < 0) {
         if (DEBUG) {
@@ -43,7 +46,8 @@ void PiMotor::stop() {
     }
    
    //Free resources & GPIO access
-   gpioTerminate();   
+   gpioTerminate();  
+#endif 
 }
 
 void PiMotor::runForMS(int direction, int speed, int milliseconds) {
@@ -66,6 +70,7 @@ void PiMotor::runForMS(int direction, int speed, int milliseconds) {
 
 void PiMotor::run (int direction, int speed) {
     //Initialise GPIO.
+#if PI_ENABLE
     if (gpioInitialise() < 0) {
         if (DEBUG) {
             fprintf(stderr, "PiGPIO initialisation failed in PiMotor::run.\n\r");
@@ -93,4 +98,5 @@ void PiMotor::run (int direction, int speed) {
    
    //Free resources & GPIO access
    gpioTerminate();
+#endif
 }
