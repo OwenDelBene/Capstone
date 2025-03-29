@@ -1,4 +1,5 @@
 // Server side C program to demonstrate Socket programming
+#include <algorithm>
 #include <stdio.h>
 #include <sys/socket.h>
 #include <unistd.h>
@@ -14,9 +15,19 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+typedef std::chrono::high_resolution_clock Time;
+typedef std::chrono::milliseconds ms;
+typedef std::chrono::duration<float> fsec;
+#include <mutex>
+#include <condition_variable>
+#include <optional>
+#include <semaphore>
+
 using std::vector;
 using std::thread;
 
+#define PID_PERIOD  100
+#define EKF_PERIOD  100
 
 #if EKF_ENABLE
 #include "Ekf.h"
@@ -30,9 +41,9 @@ using std::thread;
 #include "pid.h"
 #endif
 
+#include "KDTree.h"
 #if INV_ENABLE
 #include "linearAlgebra.h"
-#include "KDTree.h"
 
 #define INVERSE_KINEMATICS_DB_FILEPATH "inverse_kinematics.db"
 #endif
@@ -49,20 +60,37 @@ char* find_token(char line[], const char symbol[], const char match[]);
 int send_message(int fd, char image_path[], char head[]);
 char http_header[25] = "HTTP/1.1 200 Ok\r\n";
 
-void ekfThreadFunction(vector<char>* q);
+void ekfThreadFunction();
+void pidThreadFunction();
+/*
+std::condition_variable ekf_enable;
+std::mutex ekf_mutex;
+bool ekf_en = false;
+std::condition_variable pid_enable;
+std::mutex pid_mutex;
+bool pid_en = false;
+*/
 
+std::binary_semaphore pwm_sem{0};
+std::binary_semaphore ekf_enable{0};
+std::binary_semaphore pid_enable{0};
+bool ekf_en = false;
+vector<Pwm_Type> pwm_vec= vector<Pwm_Type>(3); 
+std::condition_variable pwm_cv;
+std::mutex pwm_mutex;
 
 
 int main(int argc, char const *argv[])
 {
 
-    vector<thread> ekfThreads;
     vector<char> ekf_q;
     int server_fd, new_socket, pid; 
     long valread;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
-    
+   
+    thread ekf_thread(ekfThreadFunction); 
+    thread pid_thread(pidThreadFunction); 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -136,16 +164,16 @@ int main(int argc, char const *argv[])
                 else if (strcmp(parse_string, "enable") ==0 ) {
                   //enable ekf/pid control
                   //create new thread
-                  if (ekfThreads.size() == 0) {
-                    ekf_q.clear();
-                    ekfThreads.push_back(std::move(thread(ekfThreadFunction, &ekf_q))); 
+                  if (ekf_en) {
+                    ekf_enable.acquire();
+                    pid_enable.acquire();
+                   
                   }
                   else {
-                    ekf_q.push_back('q');
-                    for (auto&x: ekfThreads) {
-                        x.join();
-                    }
-                  }
+                    ekf_enable.release();
+                    pid_enable.release();
+                    ekf_en^=1;
+                }
                 }
                  
                 printf("\n------------------Server sent----------------------------------------------------\n");
@@ -163,7 +191,7 @@ int main(int argc, char const *argv[])
             close(new_socket);
             free(copy);
             free(copy_head);  
-        }
+          }
         else{
             printf(">>>>>>>>>>Parent create child with pid: %d <<<<<<<<<", pid);
             close(new_socket);
@@ -199,14 +227,63 @@ char* parse(char line[], const char symbol[])
    return message;
 }
 
-void ekfThreadFunction(vector<char>* q) {
+void pidThreadFunction() {
+vector<Pwm_Type> pwm_des(3,0);
+vector<Pwm_Type> pwm_meas(3,0);
+#if PID_ENABLE
+PIDController pid;
+float kp = .1;
+float ki = .2;
+float kd = .3;
+float lpf = 0.01f; //low pass filter coeff
+float max = 2.0f;
+float min = -max;
+//TODO accurate dt per loop
+PIDInit(&pid, kp, ki, kd, lpf, max, min);
+#endif
+#if SERVO_ENABLE
+  PCA9685 pca("/dev/i2c-0", 0xFF); //TODO address
+#endif 
+auto T1 = Time::now();
+  while (true) {
+    //if disabled then non busy wait
+    pid_enable.acquire();
+    //get updated motor_angles
+    pwm_sem.acquire();
+    if (pwm_vec.size()){
+      pwm_des = pwm_vec;
+      pwm_vec.clear();
+    }
+    pwm_sem.release();
+    //motor_angles to pwm
+    //pid to desired pwm
+#if PID_ENABLE
+    for (int i=0; i<3; i++) {
+      pwm_meas[i] = pca.getPWM(i);
+    }
+    //This either needs to be before SERVO, or need to copy servo below
+    auto T2 = Time::now();
+    fsec fs = T2 - T1;
+    float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
+    for (int i=0; i<3; i++) {
+      pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
+    }
+    T1 = T2;
+#endif
 
+    pid_enable.release();
+    std::this_thread::sleep_for(std::chrono::milliseconds(PID_PERIOD));
+  }
+}
+
+void ekfThreadFunction() {
+  
   vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
   double eul[] = {0, 0, 0};
   float pwm_des[] = {0, 0, 0};
   double pwm_meas[] = {0, 0, 0};
-  double dt = 1;
+  auto T1 = Time::now();
 #if EKF_ENABLE 
   ekfData ekf;
   double P[7][7];
@@ -220,35 +297,13 @@ void ekfThreadFunction(vector<char>* q) {
     printf("Imu not detected");
  }
 #endif
-
-#if SERVO_ENABLE
-  PCA9685 pca("/dev/i2c-0", 0xFF); //TODO address
-#endif 
-
-
-#if PID_ENABLE
-PIDController pid;
-float kp = .1;
-float ki = .2;
-float kd = .3;
-float lpf = 0.01f; //low pass filter coeff
-float max = 2.0f;
-float min = -max;
-
-PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
-
-#endif 
-
 #if INV_ENABLE
-
   KDTree<2, 3> tree;
   fillTree(&tree, INVERSE_KINEMATICS_DB_FILEPATH);
-
 #endif
 
-
-
-  while (q->size() == 0) {
+  while (true) {
+  ekf_enable.acquire();
 #if IMU_ENABLE 
   data = &imu.imuDataGet();
   //accel in g
@@ -262,7 +317,11 @@ PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
   
 #endif
 #if EKF_ENABLE 
+    auto T2 = Time::now();
+    fsec fs = T2 - T1;
+    float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
     ekf_step(x.data(), P, &ekf, y, dt, x.data(), P);  
+    T1 = T2;
 #endif
 #if INV_ENABLE
   quat2Eul(x.data(), eul);
@@ -270,35 +329,14 @@ PIDInit(&pid, kp, ki, kd, lpf, dt, max, min);
   if (! tree.search(angles, pwm_des)) {
       printf("Could not find solution for inverse kinematics\n");
   } 
+  pwm_sem.acquire();
+  pwm_vec = vector<Pwm_Type>(pwm_des, pwm_des + 3 ); 
+  pwm_sem.release();
 #endif
-#if SERVO_ENABLE
-  for (int i=0; i<3; i++) {
-    pca.setPWM(i, pwm_des[i]); //TODO check led value
-  }
-  //Do i need to sleep?
-  for (int i=0; i<3; i++) {
-    pwm_meas[i] = pca.getPWM(i);
-  }
-#endif
-#if PID_ENABLE
-    //This either needs to be before SERVO, or need to copy servo below
-    for (int i=0; i<3; i++) {
-      pwm_des[i] = PIDUpdate(&pid, pwm_des[i], pwm_meas[i]);
-    }
-#endif
-#if SERVO_ENABLE
-  for (int i=0; i<3; i++) {
-    pca.setPWM(i, pwm_des[i]); //TODO check led value
-  }
-  //Do i need to sleep?
-  for (int i=0; i<3; i++) {
-    pwm_meas[i] = pca.getPWM(i);
-  }
-#endif
-
 
   printf("ekf iteration\n");
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  ekf_enable.release();
+  std::this_thread::sleep_for(std::chrono::milliseconds(EKF_PERIOD));
   }
   printf("EKF disabled\n");
 
