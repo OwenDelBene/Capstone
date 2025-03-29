@@ -1,6 +1,6 @@
 #include "pid.h"
 
-void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float dt, float maxOutput, float minOutput)
+void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float maxOutput, float minOutput)
 {
 	pid->integral = 0.0f;
 	pid->prevError = 0.0f;
@@ -16,7 +16,6 @@ void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float 
 
 
 	pid->tau = tau;
-	pid->T = dt;
 
 	pid->upperLimit = maxOutput;
 	pid->lowerLimit = minOutput;
@@ -26,7 +25,7 @@ void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float 
 
 
 
-float PIDUpdate(PIDController* pid, float setpoint, float measurement)
+float PIDUpdate(PIDController* pid, float setpoint, float measurement, float dt)
 {
 	//Error signal
 
@@ -36,7 +35,7 @@ float PIDUpdate(PIDController* pid, float setpoint, float measurement)
 	float proportional = pid->kp * error;
 
 	//Integral term	
-	pid->integral = pid->integral + 0.5f * pid->ki * pid->T * (error + pid->prevError);
+	pid->integral = pid->integral + 0.5f * pid->ki * dt * (error + pid->prevError);
 
 	
 	//integrator clamping 
@@ -61,8 +60,8 @@ float PIDUpdate(PIDController* pid, float setpoint, float measurement)
 	
 	//Derivative term
 	pid->derivative = (2.0f * pid->kd * (measurement - pid->prevMeasurement) 
-			+ (2.0f * pid->tau - pid->T) * pid->derivative) 
-			/ (2.0f * pid->tau * pid->T);
+			+ (2.0f * pid->tau - dt) * pid->derivative) 
+			/ (2.0f * pid->tau * dt);
 
 	pid->output = proportional + pid->integral + pid->derivative;
 

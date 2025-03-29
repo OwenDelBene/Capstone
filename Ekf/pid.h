@@ -13,8 +13,6 @@ typedef struct{
 	float lowerLimit;
 	float upperLimit;
 
-	//sample time (s)
-	float T;
 
 
 	float integral;
@@ -29,8 +27,8 @@ typedef struct{
 } PIDController;
 
 
-void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float dt, float maxOutput, float minOutput);
-float PIDUpdate(PIDController* pid, float setpoint, float measurement);
+void PIDInit(PIDController* pid, float kp, float ki, float kd, float tau, float maxOutput, float minOutput);
+float PIDUpdate(PIDController* pid, float setpoint, float measurement, float dt);
 
 
 #endif
