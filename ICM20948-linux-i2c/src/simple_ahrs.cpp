@@ -1,11 +1,3 @@
-////////////////////////////////////////////////////////////////////////////////
-// Copyright (C) 2020 Waveshare Electronics
-//
-// This code has been taken from Waveshare's example implementation of ICM20948
-// and adjusted to the current project.
-//
-////////////////////////////////////////////////////////////////////////////////
-
 #include <cmath>
 #include "ahrs_math.h"
 #include "simple_ahrs.h"

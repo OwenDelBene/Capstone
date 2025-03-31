@@ -1,10 +1,3 @@
-/* 
- * File:   PiMotor.h
- * Author: Steve McMillan
- *
- * Created on 07 July 2017, 17:13
- */
-
 #ifndef PIMOTOR_H
 #define PIMOTOR_H
 

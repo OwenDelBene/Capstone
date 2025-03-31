@@ -27,3 +27,6 @@ copy:
 ifdef DISTPATH
 	cp lib$(NAME)* $(DISTPATH)
 endif
+
+test:
+	g++ *.cpp $(INCLUDES)

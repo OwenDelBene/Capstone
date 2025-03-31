@@ -1,9 +1,3 @@
-/* 
- * File:   PiMotor.cpp
- * Author: Steve McMillan
- *
- * Created on 07 July 2017, 17:13
- */
 #include <stdio.h>
 #if PI_ENABLE
 #include <pigpio.h>
