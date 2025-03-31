@@ -18,7 +18,7 @@ SRC_DIR :=./src
 
 LDFLAGS := -lpthread
 
-CXX:=g++-12 
+#CXX:=g++-12 
 CXX_FLAGS:=-g -I ./src/ -DPI_ENABLE=$(PI_ENABLE) \
 					 					 -DEKF_ENABLE=$(EKF_ENABLE) \
 										 -DIMU_ENABLE=$(IMU_ENABLE) \
@@ -27,7 +27,8 @@ CXX_FLAGS:=-g -I ./src/ -DPI_ENABLE=$(PI_ENABLE) \
 										 -DINV_ENABLE=$(INV_ENABLE)
 
 SRCS:= $(shell find $(SRC_DIR) -name '*.cpp')
-OBJS := $(SRCS:src/%.cpp=$(BUILD_DIR)/%.o)
+OBJ_FTYPE := o
+OBJS := $(SRCS:src/%.cpp=$(BUILD_DIR)/%.${OBJ_FTYPE})
 .PHONY: all
 all: $(TARGET)
 
@@ -45,4 +46,5 @@ $(BUILD_DIR)/%.o: $(SRC_DIR)/%.cpp
 
 $(TARGET): $(OBJS)
 		@echo "Linking $(TARGET)"
+		@echo "howdy $(OBJS)"
 			@$(CXX)  $(CXX_FLAGS) -o $@ $^ $(LDFLAGS)  -std=c++20
