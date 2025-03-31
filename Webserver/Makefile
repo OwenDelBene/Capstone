@@ -2,9 +2,9 @@ TARGET := ALARS_Server
 
 PI_ENABLE=0
 EKF_ENABLE=1
-IMU_ENABLE=1
+IMU_ENABLE=0
 PID_ENABLE=1
-SERVO_ENABLE=1
+SERVO_ENABLE=0
 INV_ENABLE=1
 
 
@@ -19,7 +19,7 @@ SRC_DIR :=./src
 LDFLAGS := -lpthread
 
 CXX:=g++-12 
-CXX_FLAGS:=-I ./src/ -DPI_ENABLE=$(PI_ENABLE) \
+CXX_FLAGS:=-g -I ./src/ -DPI_ENABLE=$(PI_ENABLE) \
 					 					 -DEKF_ENABLE=$(EKF_ENABLE) \
 										 -DIMU_ENABLE=$(IMU_ENABLE) \
 										 -DPID_ENABLE=$(PID_ENABLE) \
@@ -34,6 +34,7 @@ all: $(TARGET)
 .PHONY: clean
 clean:
 		rm $(TARGET)
+		rm *.out
 		rm -r $(BUILD_DIR)/*
 
 

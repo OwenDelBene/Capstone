@@ -26,15 +26,22 @@ typedef std::chrono::duration<float> fsec;
 using std::vector;
 using std::thread;
 
-#define PID_PERIOD  100
+#define PID_PERIOD  10
 #define EKF_PERIOD  100
+
+#define SERVO_HAT_ADDRESS 0x40
+
 
 #if EKF_ENABLE
 #include "Ekf.h"
+#include <fstream>
 #endif
 
 #if IMU_ENABLE
 #include "icm20948.h"
+#define DEG2RAD M_PI/180.0f
+#else
+#include "HIL.h"
 #endif
 
 #if PID_ENABLE
@@ -71,26 +78,23 @@ std::mutex pid_mutex;
 bool pid_en = false;
 */
 
-std::binary_semaphore pwm_sem{0};
-std::binary_semaphore ekf_enable{0};
-std::binary_semaphore pid_enable{0};
-bool ekf_en = false;
+bool ekf_en = true;
+std::binary_semaphore pwm_sem{ekf_en};
+std::binary_semaphore ekf_enable{ekf_en};
+std::binary_semaphore pid_enable{ekf_en};
 vector<Pwm_Type> pwm_vec= vector<Pwm_Type>(3); 
-std::condition_variable pwm_cv;
-std::mutex pwm_mutex;
 
 
 int main(int argc, char const *argv[])
 {
 
-    vector<char> ekf_q;
     int server_fd, new_socket, pid; 
     long valread;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
-   
     thread ekf_thread(ekfThreadFunction); 
     thread pid_thread(pidThreadFunction); 
+   
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -167,6 +171,7 @@ int main(int argc, char const *argv[])
                   if (ekf_en) {
                     ekf_enable.acquire();
                     pid_enable.acquire();
+                    ekf_en^=1;
                    
                   }
                   else {
@@ -228,6 +233,7 @@ char* parse(char line[], const char symbol[])
 }
 
 void pidThreadFunction() {
+  cout << "howdy world pid " << endl;
 vector<Pwm_Type> pwm_des(3,0);
 vector<Pwm_Type> pwm_meas(3,0);
 #if PID_ENABLE
@@ -242,10 +248,11 @@ float min = -max;
 PIDInit(&pid, kp, ki, kd, lpf, max, min);
 #endif
 #if SERVO_ENABLE
-  PCA9685 pca("/dev/i2c-0", 0xFF); //TODO address
+  PCA9685 pca("/dev/i2c-0", SERVO_HAT_ADDRESS); //TODO address
 #endif 
 auto T1 = Time::now();
   while (true) {
+#if PID_ENABLE
     //if disabled then non busy wait
     pid_enable.acquire();
     //get updated motor_angles
@@ -257,7 +264,7 @@ auto T1 = Time::now();
     pwm_sem.release();
     //motor_angles to pwm
     //pid to desired pwm
-#if PID_ENABLE
+#if SERVO_ENABLE
     for (int i=0; i<3; i++) {
       pwm_meas[i] = pca.getPWM(i);
     }
@@ -270,20 +277,24 @@ auto T1 = Time::now();
     }
     T1 = T2;
 #endif
+#endif
 
     pid_enable.release();
     std::this_thread::sleep_for(std::chrono::milliseconds(PID_PERIOD));
+    cout << "pid iteration" << endl;
   }
 }
 
 void ekfThreadFunction() {
-  
+  cout << "howdy world ekf" << endl; 
   vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
   double eul[] = {0, 0, 0};
   float pwm_des[] = {0, 0, 0};
   double pwm_meas[] = {0, 0, 0};
   auto T1 = Time::now();
+  double dt = EKF_PERIOD * 1e-3;
+  std::fstream of("rpy.out", std::ios_base::out);
 #if EKF_ENABLE 
   ekfData ekf;
   double P[7][7];
@@ -296,13 +307,25 @@ void ekfThreadFunction() {
  if (! imu.initialise() ) {
     printf("Imu not detected");
  }
+#else
+  vector<double> true_x(7);
+  double init_eul[] = {-M_PI/6.0, M_PI/8.0, M_PI/12.0};
+  double w0[] = {-M_PI/180.0, 5*M_PI/180.0, 0};
+  eul2Quat(init_eul[0], init_eul[1], init_eul[2], true_x.data());
+  true_x[4] = w0[0];
+  true_x[5] = w0[1];
+  true_x[6] = w0[2];
+  vector<double> eule(3);
+  HIL hil(ekf, true_x);
 #endif
 #if INV_ENABLE
   KDTree<2, 3> tree;
   fillTree(&tree, INVERSE_KINEMATICS_DB_FILEPATH);
 #endif
-
+  int i=0;
   while (true) {
+    if (i++ > 10) return;
+  cout << "howdy world ekf" << endl; 
   ekf_enable.acquire();
 #if IMU_ENABLE 
   data = &imu.imuDataGet();
@@ -310,16 +333,20 @@ void ekfThreadFunction() {
   //gyro in dps
   //mag in uT
   for (int i=0; i<3; i++) {
-    y[i] = data->mAcc[i];
-    y[3+i] = data->mMag[i];
-    x[4+i] = data->mGyro[i];
+    y[i] = data->mAcc[i] * 9.81;
+    y[3+i] = data->mMag[i] ;
+    x[4+i] = data->mGyro[i] * DEG2RAD;
   }
-  
+#else
+  hil.propogate(dt, y, x.data()+4);
+  quat2Eul(x.data(), eule.data());
+  hil.writeVector(hil.ekf_eul,eule);
+  hil.writeVector(of, eule); 
 #endif
 #if EKF_ENABLE 
     auto T2 = Time::now();
     fsec fs = T2 - T1;
-    float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
+    dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
     ekf_step(x.data(), P, &ekf, y, dt, x.data(), P);  
     T1 = T2;
 #endif
