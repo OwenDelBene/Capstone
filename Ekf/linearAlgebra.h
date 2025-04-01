@@ -8,7 +8,7 @@
 
 /* define a maximum array size for the functions that need
  to allocate memory within their routine */
-#define LINEAR_ALGEBRA_MAX_ARRAY_SIZE (64*64)
+#define LINEAR_ALGEBRA_MAX_ARRAY_SIZE (7*7)
 
 #define MXINDEX(dim2, row, col) ((row)*(dim2) + (col))
 
