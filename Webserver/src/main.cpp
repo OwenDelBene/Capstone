@@ -51,8 +51,7 @@ using std::thread;
 #include "KDTree.h"
 #if INV_ENABLE
 #include "linearAlgebra.h"
-
-#define INVERSE_KINEMATICS_DB_FILEPATH "inverse_kinematics.db"
+#include "inverseKinematics.h"
 #endif
 
 #if SERVO_ENABLE
@@ -82,7 +81,7 @@ bool ekf_en = true;
 std::binary_semaphore pwm_sem{ekf_en};
 std::binary_semaphore ekf_enable{ekf_en};
 std::binary_semaphore pid_enable{ekf_en};
-vector<Pwm_Type> pwm_vec= vector<Pwm_Type>(3); 
+vector<double> pwm_vec= vector<double>(3); 
 
 
 int main(int argc, char const *argv[])
@@ -234,8 +233,8 @@ char* parse(char line[], const char symbol[])
 
 void pidThreadFunction() {
   cout << "howdy world pid " << endl;
-vector<Pwm_Type> pwm_des(3,0);
-vector<Pwm_Type> pwm_meas(3,0);
+vector<double> pwm_des(3,0);
+vector<double> pwm_meas(3,0);
 #if PID_ENABLE
 PIDController pid;
 float kp = .1;
@@ -290,7 +289,7 @@ void ekfThreadFunction() {
   vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
   double eul[] = {0, 0, 0};
-  float pwm_des[] = {0, 0, 0};
+  double pwm_des[] = {0, 0, 0};
   double pwm_meas[] = {0, 0, 0};
   auto T1 = Time::now();
   double dt = EKF_PERIOD * 1e-3;
@@ -317,10 +316,6 @@ void ekfThreadFunction() {
   true_x[6] = w0[2];
   vector<double> eule(3);
   HIL hil(ekf, true_x);
-#endif
-#if INV_ENABLE
-  KDTree<2, 3> tree;
-  fillTree(&tree, INVERSE_KINEMATICS_DB_FILEPATH);
 #endif
   int i=0;
   while (true) {
@@ -352,12 +347,9 @@ void ekfThreadFunction() {
 #endif
 #if INV_ENABLE
   quat2Eul(x.data(), eul);
-  array<Angle_Type, 2>angles = {eul[0], eul[1]};
-  if (! tree.search(angles, pwm_des)) {
-      printf("Could not find solution for inverse kinematics\n");
-  } 
+  inverseKinematics(eul[0], eul[1], pwm_des);
   pwm_sem.acquire();
-  pwm_vec = vector<Pwm_Type>(pwm_des, pwm_des + 3 ); 
+  pwm_vec = vector<double>(pwm_des, pwm_des + 3 ); 
   pwm_sem.release();
 #endif
 
