@@ -2,6 +2,20 @@
 #include "linearAlgebra.h"
 
 
+
+#define MIN_ANGLE -90
+#define MAX_ANGLE 90
+
+#define MIN_PWM 0
+#define MAX_PWM 2000
+
+uint32_t anglesToPwm(double angle)
+{
+  return MIN_PWM + (angle - MIN_ANGLE) * (MAX_PWM - MIN_PWM)/ (MAX_ANGLE-MIN_ANGLE);
+
+}
+
+
 void L_bai(double rpp[3], double rop[3][3], double ra[3], double rb[3], double res[3])
 {
 

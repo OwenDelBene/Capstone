@@ -139,14 +139,3 @@ void fillTree(KDTree<A, B>* tree, const string& filepath) {
 
 }
 
-#define MIN_ANGLE 0
-#define MAX_ANGLE 180
-
-#define MIN_PWM 0
-#define MAX_PWM 2000
-
-uint32_t anglesToPwm(Angle_Type angle)
-{
-  return MIN_PWM + (angle - MIN_ANGLE) * (MAX_PWM - MIN_PWM)/ (MAX_ANGLE-MIN_ANGLE);
-
-}

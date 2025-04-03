@@ -348,6 +348,9 @@ void ekfThreadFunction() {
 #if INV_ENABLE
   quat2Eul(x.data(), eul);
   inverseKinematics(eul[0], eul[1], pwm_des);
+  for (int i=0; i<3; i++) {
+    pwm_des[i] = anglesToPwm(pwm_des[i]);
+  } 
   pwm_sem.acquire();
   pwm_vec = vector<double>(pwm_des, pwm_des + 3 ); 
   pwm_sem.release();
