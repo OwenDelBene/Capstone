@@ -6,7 +6,8 @@
 #include <unistd.h>
 #include "i2c.h"
 
-
+#include <stdio.h>
+#include <errno.h>
 I2C::I2C(): mSerial(-1), mCurrentDevice(0)
 {
 }
@@ -107,6 +108,7 @@ bool I2C::connectToDevice(const uint8_t deviceAddr) const
         }
         else
         {
+          perror("could not connect to device");
             syslog(LOG_ERR, "Failed to connect to device: %02x.", deviceAddr);
             return false;
         }
