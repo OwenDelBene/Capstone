@@ -15,7 +15,7 @@
 #include "simple_ahrs.h"
 
 /* define ICM-20948 Device I2C address*/
-#define I2C_ADD_ICM20948            0x68
+#define I2C_ADD_ICM20948            0x69
 #define I2C_ADD_ICM20948_AK09916    0x0C
 #define I2C_ADD_ICM20948_AK09916_READ  0x80
 #define I2C_ADD_ICM20948_AK09916_WRITE 0x00
