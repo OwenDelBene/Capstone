@@ -1,4 +1,3 @@
-// Server side C program to demonstrate Socket programming
 #include <algorithm>
 #include <stdio.h>
 #include <sys/socket.h>
@@ -15,6 +14,7 @@
 #include <thread>
 #include <vector>
 #include <chrono>
+#include <sstream>
 typedef std::chrono::high_resolution_clock Time;
 typedef std::chrono::milliseconds ms;
 typedef std::chrono::duration<float> fsec;
@@ -26,8 +26,8 @@ typedef std::chrono::duration<float> fsec;
 using std::vector;
 using std::thread;
 
-#define PID_PERIOD  10
-#define EKF_PERIOD  100
+#define PID_PERIOD  2000
+#define EKF_PERIOD  2000
 
 #define SERVO_HAT_ADDRESS 0x40
 
@@ -68,6 +68,7 @@ char http_header[25] = "HTTP/1.1 200 Ok\r\n";
 
 void ekfThreadFunction();
 void pidThreadFunction();
+void webServerThreadFunction(int new_socket);
 /*
 std::condition_variable ekf_enable;
 std::mutex ekf_mutex;
@@ -87,6 +88,7 @@ vector<double> pwm_vec= vector<double>(3);
 int main(int argc, char const *argv[])
 {
 
+    vector<thread> webServerThreads;
     int server_fd, new_socket, pid; 
     long valread;
     struct sockaddr_in address;
@@ -129,91 +131,7 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
         
-        pid = fork();
-        if(pid < 0){
-            perror("Error on fork");
-            exit(EXIT_FAILURE);
-        }
-        
-        if(pid == 0){
-            char buffer[30000] = {0};
-            valread = read( new_socket , buffer, 30000);
-
-            printf("\n buffer message: %s \n ", buffer);
-            char *parse_string_method = parse_method(buffer, " ");  
-            printf("Client method: %s\n", parse_string_method);
-
-
-            char *parse_string = parse(buffer, " ");  
-            printf("Client ask for path: %s\n", parse_string);
-
-            char *copy = (char *)malloc(strlen(parse_string) + 1);
-            strcpy(copy, parse_string);
-
-            char *copy_head = (char *)malloc(strlen(http_header) +200);
-            strcpy(copy_head, http_header);
-
-            if(parse_string_method[0] == 'G' && parse_string_method[1] == 'E' && parse_string_method[2] == 'T'){
-                if(strlen(parse_string) <= 1){
-                    //case that the parse_string = "/"  --> Send index.html file
-                    char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
-                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    send_message(new_socket, path_head, copy_head);
-                }
-                if (strcmp(parse_string, "forward") ==0) {
-                  cout << "drive forward " << endl;
-                    char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
-                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    send_message(new_socket, path_head, copy_head);
-                  //drive train forward
-                }
-                else if (strcmp(parse_string, "enable") ==0 ) {
-                  cout << "enable compensation " << endl;
-                    char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
-                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    send_message(new_socket, path_head, copy_head);
-                  //enable ekf/pid control
-                  //create new thread
-                  if (ekf_en) {
-                    ekf_enable.acquire();
-                    pid_enable.acquire();
-                    ekf_en^=1;
-                   
-                  }
-                  else {
-                    ekf_enable.release();
-                    pid_enable.release();
-                    ekf_en^=1;
-                }
-                }
-                else {
-
-                    cout << "NOTHING MATCHED? " << parse_string << endl;
-                }
-                 
-                printf("\n------------------Server sent----------------------------------------------------\n");
-            }
-            else if (parse_string_method[0] == 'P' && parse_string_method[1] == 'O' && parse_string_method[2] == 'S' && parse_string_method[3] == 'T'){
-                char *find_string = (char*)malloc(200);
-                find_string = find_token(buffer, "\r\n", "action");
-                strcat(copy_head, "Content-Type: text/plain \r\n\r\n"); //\r\n\r\n
-                //strcat(copy_head, "Content-Length: 12 \n");
-                strcat(copy_head, "User Action: ");
-                printf("find string: %s \n", find_string);
-                strcat(copy_head, find_string);
-                write(new_socket, copy_head, strlen(copy_head));
-            }
-            close(new_socket);
-            free(copy);
-            free(copy_head);  
-          }
-        else{
-            printf(">>>>>>>>>>Parent create child with pid: %d <<<<<<<<<", pid);
-            close(new_socket);
-        }
+        webServerThreads.push_back(std::move(std::thread(webServerThreadFunction, new_socket))) ;   
     }
     close(server_fd);
     return 0;
@@ -294,7 +212,13 @@ auto T1 = Time::now();
 
     pid_enable.release();
     std::this_thread::sleep_for(std::chrono::milliseconds(PID_PERIOD));
-    cout << "pid iteration" << endl;
+    std::thread::id threadId = std::this_thread::get_id();
+
+  std::stringstream ss;
+  ss << threadId;
+  std::string threadIdString = ss.str();
+    
+    cout << "pid iteration " << threadIdString << endl;
   }
 }
 
@@ -333,7 +257,7 @@ void ekfThreadFunction() {
 #endif
   int i=0;
   while (true) {
-    if (i++ > 10) return;
+   // if (i++ > 10) return;
   cout << "howdy world ekf" << endl; 
   ekf_enable.acquire();
 #if IMU_ENABLE 
@@ -370,7 +294,13 @@ void ekfThreadFunction() {
   pwm_sem.release();
 #endif
 
-  printf("ekf iteration\n");
+std::thread::id threadId = std::this_thread::get_id();
+
+  std::stringstream ss;
+  ss << threadId;
+  std::string threadIdString = ss.str();
+
+  cout << "ekf iteration: " << threadIdString << endl;
   ekf_enable.release();
   std::this_thread::sleep_for(std::chrono::milliseconds(EKF_PERIOD));
   }
@@ -479,9 +409,117 @@ int send_message(int fd, char image_path[], char head[]){
     }
 }
 
+void webServerThreadFunction(int new_socket) {
+
+            char buffer[30000] = {0};
+            size_t valread = read( new_socket , buffer, 30000);
+
+            printf("\n buffer message: %s \n ", buffer);
+            char *parse_string_method = parse_method(buffer, " ");  
+            printf("Client method: %s\n", parse_string_method);
 
 
+            char *parse_string = parse(buffer, " ");  
+            printf("Client ask for path: %s\n", parse_string);
 
+            char *copy = (char *)malloc(strlen(parse_string) + 1);
+            strcpy(copy, parse_string);
 
+            char *copy_head = (char *)malloc(strlen(http_header) +200);
+            strcpy(copy_head, http_header);
 
+            if(parse_string_method[0] == 'G' && parse_string_method[1] == 'E' && parse_string_method[2] == 'T'){
+                if(strlen(parse_string) <= 1){
+                    //case that the parse_string = "/"  --> Send index.html file
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+                }
+                if (strcmp(parse_string, "/Forward?") ==0) {
+                  cout << "drive forward " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+                  //drive train forward
+                }
+                if (strcmp(parse_string, "/Backward?") ==0) {
+                  cout << "drive forward " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+                  //drive train forward
+                }
+                if (strcmp(parse_string, "/Left?") ==0) {
+                  cout << "drive forward " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+                  //drive train forward
+                }
+                if (strcmp(parse_string, "/Right?") ==0) {
+                  cout << "drive forward " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+                  //drive train forward
+                }
+                else if (strcmp(parse_string, "/Stop?") ==0 ) {
+                  cout << "enable compensation " << endl;
+                  //enable ekf/pid control
+                  //create new thread
+                  if (ekf_en) {
+		    cout << "stopping ekf " << endl;
+                    ekf_enable.acquire();
+                    pid_enable.acquire();
+                    ekf_en^=1;
+                    char path_head[500] = ".";
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    strcat(path_head, "/index_start.html");
+                    send_message(new_socket, path_head, copy_head);
+                   
+                  }
+                  else {
+	            cout << "starting ekf " << endl;
+                    ekf_enable.release();
+                    pid_enable.release();
+                    ekf_en^=1;
+                    char path_head[500] = ".";
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    strcat(path_head, "/index.html");
+                    send_message(new_socket, path_head, copy_head);
+                }
+                }
+                else {
 
+                    cout << "NOTHING MATCHED? " << parse_string << endl;
+                }
+                 
+                printf("\n------------------Server sent----------------------------------------------------\n");
+            }
+            else if (parse_string_method[0] == 'P' && parse_string_method[1] == 'O' && parse_string_method[2] == 'S' && parse_string_method[3] == 'T'){
+                char *find_string = (char*)malloc(200);
+                find_string = find_token(buffer, "\r\n", "action");
+                strcat(copy_head, "Content-Type: text/plain \r\n\r\n"); //\r\n\r\n
+                //strcat(copy_head, "Content-Length: 12 \n");
+                strcat(copy_head, "User Action: ");
+                printf("find string: %s \n", find_string);
+                strcat(copy_head, find_string);
+                write(new_socket, copy_head, strlen(copy_head));
+            }
+	    /*cout << "not get or post " << parse_string_method << endl;
+	    cout << "not get or post " << parse_string << endl;
+	char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
+	    */
+            close(new_socket);
+            free(copy);
+            free(copy_head);  
+
+}
