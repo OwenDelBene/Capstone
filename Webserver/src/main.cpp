@@ -162,9 +162,19 @@ int main(int argc, char const *argv[])
                     send_message(new_socket, path_head, copy_head);
                 }
                 if (strcmp(parse_string, "forward") ==0) {
+                  cout << "drive forward " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
                   //drive train forward
                 }
                 else if (strcmp(parse_string, "enable") ==0 ) {
+                  cout << "enable compensation " << endl;
+                    char path_head[500] = ".";
+                    strcat(path_head, "/index.html");
+                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
+                    send_message(new_socket, path_head, copy_head);
                   //enable ekf/pid control
                   //create new thread
                   if (ekf_en) {
@@ -178,6 +188,10 @@ int main(int argc, char const *argv[])
                     pid_enable.release();
                     ekf_en^=1;
                 }
+                }
+                else {
+
+                    cout << "NOTHING MATCHED? " << parse_string << endl;
                 }
                  
                 printf("\n------------------Server sent----------------------------------------------------\n");
