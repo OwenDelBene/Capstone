@@ -36,6 +36,7 @@ int main(int argc, char* argv[])
         cout << "setting pwm " << anglesToPwm(servoAngles[0]) << " " << anglesToPwm(servoAngles[1]) << endl;
         pca.setPWM(1, anglesToPwm(servoAngles[0]));
         pca.setPWM(2, anglesToPwm(servoAngles[1]));
+        pca.setPWM(3, anglesToPwm(servoAngles[2]));
       }else {
         cout<< "setting pwm: " << led << " to: " << value << endl;
         pca.setPWM(std::stoi(led), std::stoi(value));
