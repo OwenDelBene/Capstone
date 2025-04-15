@@ -65,7 +65,7 @@ int main(int argc, char** argv)
     /** Time to sleep in milliseconds for the main loop. */
     int sleepTime;
     /** Flag to indicate of gyro calibration should be performed. */
-    bool calib = true;
+    bool calib = false;
     /** IMU implementation. */
     ICM20948 imu;
     /** Pointer for IMU data.  */

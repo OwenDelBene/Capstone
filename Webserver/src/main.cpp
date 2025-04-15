@@ -179,7 +179,7 @@ float min = -max;
 PIDInit(&pid, kp, ki, kd, lpf, max, min);
 #endif
 #if SERVO_ENABLE
-  PCA9685 pca("/dev/i2c-0", SERVO_HAT_ADDRESS); //TODO address
+  PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); //TODO address
 #endif 
 auto T1 = Time::now();
   while (true) {
@@ -196,15 +196,16 @@ auto T1 = Time::now();
     //motor_angles to pwm
     //pid to desired pwm
 #if SERVO_ENABLE
-    for (int i=0; i<3; i++) {
+    for (int i=1; i<4; i++) {
       pwm_meas[i] = pca.getPWM(i);
     }
     //This either needs to be before SERVO, or need to copy servo below
     auto T2 = Time::now();
     fsec fs = T2 - T1;
     float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
-    for (int i=0; i<3; i++) {
-      pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
+    for (int i=1; i<4; i++) {
+      //pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
+      pca.setPWM(i, pwm_des[i]);
     }
     T1 = T2;
 #endif
@@ -299,8 +300,9 @@ std::thread::id threadId = std::this_thread::get_id();
   std::stringstream ss;
   ss << threadId;
   std::string threadIdString = ss.str();
-
-  cout << "ekf iteration: " << threadIdString << endl;
+  vector<double> eul(3);
+  quat2Eul(x.data(), eul.data());
+  cout << "ekf iteration: roll, pitch " << eul[0] << " pitch " << eul[1]  << endl;
   ekf_enable.release();
   std::this_thread::sleep_for(std::chrono::milliseconds(EKF_PERIOD));
   }

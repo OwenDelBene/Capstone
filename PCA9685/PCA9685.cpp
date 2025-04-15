@@ -22,7 +22,7 @@ PCA9685::PCA9685(char* bus, int address) {
   if (i2c.openSerialPort(bus)	)
   {
   reset();
-	setPWMFreq(1000);
+	setPWMFreq(400);
 
   }
   else {
