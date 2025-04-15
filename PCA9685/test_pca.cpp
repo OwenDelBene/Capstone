@@ -16,6 +16,7 @@ int main(int argc, char* argv[])
   bool angles = false;
   if (argc == 3) {
     angles = true;
+    cout << "using inverse kinematics" << endl;
   }
     double servoAngles[] = {0,0,0};
     PCA9685 pca(argv[1], ADDRESS);
@@ -48,3 +49,4 @@ int main(int argc, char* argv[])
   }
 
 }
+
