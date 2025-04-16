@@ -33,7 +33,7 @@ int main(int argc, char* argv[])
     if (value.size() ) {
       if (angles) {
         inverseKinematics(std::stoi(value), std::stoi(value2), servoAngles);
-        cout << "setting pwm " << anglesToPwm(servoAngles[0]) << " " << anglesToPwm(servoAngles[1]) << endl;
+        cout << "setting pwm " << anglesToPwm(servoAngles[0]) << " " << anglesToPwm(servoAngles[1]) << " " << anglesToPwm(servoAngles[2]) << endl;
         pca.setPWM(1, anglesToPwm(servoAngles[0]));
         pca.setPWM(2, anglesToPwm(servoAngles[1]));
         pca.setPWM(3, anglesToPwm(servoAngles[2]));

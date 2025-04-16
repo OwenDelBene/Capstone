@@ -26,8 +26,9 @@ typedef std::chrono::duration<float> fsec;
 using std::vector;
 using std::thread;
 
-#define PID_PERIOD  2000
-#define EKF_PERIOD  2000
+#define PID_STEPS    10
+#define PID_PERIOD  100 
+#define EKF_PERIOD   50
 
 #define SERVO_HAT_ADDRESS 0x40
 
@@ -167,6 +168,8 @@ void pidThreadFunction() {
   cout << "howdy world pid " << endl;
 vector<double> pwm_des(3,0);
 vector<double> pwm_meas(3,0);
+    double pwm_set[3];
+    double pwm_step[3];
 #if PID_ENABLE
 PIDController pid;
 float kp = .1;
@@ -180,6 +183,9 @@ PIDInit(&pid, kp, ki, kd, lpf, max, min);
 #endif
 #if SERVO_ENABLE
   PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); //TODO address
+  pca.setPWM(1, 3500);
+  pca.setPWM(2, 3500);
+  pca.setPWM(3, 3500);
 #endif 
 auto T1 = Time::now();
   while (true) {
@@ -203,9 +209,19 @@ auto T1 = Time::now();
     auto T2 = Time::now();
     fsec fs = T2 - T1;
     float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
-    for (int i=1; i<4; i++) {
-      //pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
-      pca.setPWM(i, pwm_des[i]);
+    
+    v3Subtract(pwm_des, pwm_meas, pwm_step);
+    v3Scale(pwm_step, 1.0f/num_steps, pwm_step);
+    for (int step=0; step<num_steps; step++) {
+        
+      for (int i=1; i<4; i++) {
+        //pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
+        double p = pwm_meas[i] + pwm_step[i]*step;
+        pca.setPWM(i, p );
+        cout << "setting pwm " << p << endl;
+        
+      }
+
     }
     T1 = T2;
 #endif
@@ -227,7 +243,8 @@ void ekfThreadFunction() {
   cout << "howdy world ekf" << endl; 
   vector<double> x(7, 0);
   double y[6] = {0, 0, 0, 0, 0, 0};
-  double eul[] = {0, 0, 0};
+  vector<double> eul(3,0);
+  vector<double> inv(3,0);
   double pwm_des[] = {0, 0, 0};
   double pwm_meas[] = {0, 0, 0};
   auto T1 = Time::now();
@@ -284,11 +301,12 @@ void ekfThreadFunction() {
     ekf_step(x.data(), P, &ekf, y, dt, x.data(), P);  
     T1 = T2;
 #endif
+  quat2Eul(x.data(), eul.data());
 #if INV_ENABLE
-  quat2Eul(x.data(), eul);
-  inverseKinematics(-eul[0] * 180.0f/M_PI, -eul[1]*180.0f*M_PI, pwm_des);
+  inverseKinematics(-eul[0] * 180.0f/M_PI, -eul[1]*180.0f/M_PI, inv.data());
   for (int i=0; i<3; i++) {
-    pwm_des[i] = anglesToPwm(pwm_des[i]);
+    pwm_des[i] = anglesToPwm(inv[i]);
+    cout << "ekf pwm_des " << pwm_des[i] << "inverse kinematics " << inv[i] << endl;
   } 
   pwm_sem.acquire();
   pwm_vec = vector<double>(pwm_des, pwm_des + 3 ); 
@@ -300,9 +318,7 @@ std::thread::id threadId = std::this_thread::get_id();
   std::stringstream ss;
   ss << threadId;
   std::string threadIdString = ss.str();
-  vector<double> eul(3);
-  quat2Eul(x.data(), eul.data());
-  cout << "ekf iteration: roll, pitch " << eul[0] << " pitch " << eul[1]  << endl;
+  cout << "ekf iteration: roll" << eul[0] * 180.0f/M_PI << " pitch " << eul[1]*180.0f/M_PI  << endl;
   ekf_enable.release();
   std::this_thread::sleep_for(std::chrono::milliseconds(EKF_PERIOD));
   }

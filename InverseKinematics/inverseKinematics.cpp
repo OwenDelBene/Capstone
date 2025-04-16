@@ -3,8 +3,8 @@
 
 
 
-#define MIN_ANGLE -70
-#define MAX_ANGLE 45
+#define MIN_ANGLE -80
+#define MAX_ANGLE 60
 
 #define MIN_PWM 3250
 #define MAX_PWM 2000
@@ -12,8 +12,8 @@
 uint32_t anglesToPwm(double angle)
 {
   uint32_t pwm = MIN_PWM + (angle - MIN_ANGLE) * (MAX_PWM - MIN_PWM)/ (MAX_ANGLE-MIN_ANGLE);
-  if (pwm > MAX_PWM) return MAX_PWM;
-  if (pwm < MIN_PWM) return MIN_PWM;
+  if (pwm < MAX_PWM) return MAX_PWM;
+  if (pwm > MIN_PWM) return MIN_PWM;
   return pwm;
 }
 
