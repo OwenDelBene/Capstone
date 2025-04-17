@@ -13,6 +13,7 @@
 
 #include <thread>
 #include <vector>
+#include <queue>
 #include <chrono>
 #include <sstream>
 typedef std::chrono::high_resolution_clock Time;
@@ -55,9 +56,8 @@ using std::thread;
 #include "inverseKinematics.h"
 #endif
 
-#if SERVO_ENABLE
+#include "driveConfig.h"
 #include "PCA9685.h"
-#endif
 
 #define PORT 8081
 
@@ -68,8 +68,9 @@ int send_message(int fd, char image_path[], char head[]);
 char http_header[25] = "HTTP/1.1 200 Ok\r\n";
 
 void ekfThreadFunction();
-void pidThreadFunction();
-void webServerThreadFunction(int new_socket);
+void pidThreadFunction(PCA9685* pca);
+void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue);
+void driveTrainThreadFunction(std::queue<char>* q, PCA9685* pca);
 /*
 std::condition_variable ekf_enable;
 std::mutex ekf_mutex;
@@ -81,22 +82,26 @@ bool pid_en = false;
 
 bool ekf_en = true;
 std::binary_semaphore pwm_sem{ekf_en};
+std::binary_semaphore pca_sem{ekf_en};
 std::binary_semaphore ekf_enable{ekf_en};
 std::binary_semaphore pid_enable{ekf_en};
+std::condition_variable drive_cv; 
+std::mutex drive_lock; 
 vector<double> pwm_vec= vector<double>(3); 
 
 
 int main(int argc, char const *argv[])
 {
-
+  std::queue<char> driveTrainQueue;
+  PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); //TODO address
     vector<thread> webServerThreads;
     int server_fd, new_socket, pid; 
     long valread;
     struct sockaddr_in address;
     int addrlen = sizeof(address);
     thread ekf_thread(ekfThreadFunction); 
-    thread pid_thread(pidThreadFunction); 
-   
+    thread pid_thread(pidThreadFunction, &pca); 
+    thread drive_thread(driveTrainThreadFunction, &driveTrainQueue, &pca); 
     // Creating socket file descriptor
     if ((server_fd = socket(AF_INET, SOCK_STREAM, 0)) == 0)
     {
@@ -132,7 +137,7 @@ int main(int argc, char const *argv[])
             exit(EXIT_FAILURE);
         }
         
-        webServerThreads.push_back(std::move(std::thread(webServerThreadFunction, new_socket))) ;   
+        webServerThreads.push_back(std::move(std::thread(webServerThreadFunction, new_socket, &driveTrainQueue))) ;   
     }
     close(server_fd);
     return 0;
@@ -164,7 +169,7 @@ char* parse(char line[], const char symbol[])
    return message;
 }
 
-void pidThreadFunction() {
+void pidThreadFunction(PCA9685* pca) {
   cout << "howdy world pid " << endl;
 vector<double> pwm_des(3,0);
 vector<double> pwm_meas(3,0);
@@ -182,10 +187,9 @@ float min = -max;
 PIDInit(&pid, kp, ki, kd, lpf, max, min);
 #endif
 #if SERVO_ENABLE
-  PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); //TODO address
-  pca.setPWM(1, 3500);
-  pca.setPWM(2, 3500);
-  pca.setPWM(3, 3500);
+  pca->setPWM(1, 3500);
+  pca->setPWM(2, 3500);
+  pca->setPWM(3, 3500);
 #endif 
 auto T1 = Time::now();
   while (true) {
@@ -427,7 +431,70 @@ int send_message(int fd, char image_path[], char head[]){
     }
 }
 
-void webServerThreadFunction(int new_socket) {
+void sendMove(char dir, std::queue<char>* driveTrainQueue)
+{
+  std::unique_lock lk(drive_lock);
+  drive_cv.wait(lk, [driveTrainQueue] {return driveTrainQueue->size() < DRIVE_TRAIN_CAP;});
+  driveTrainQueue->push(dir);
+  lk.unlock();
+  drive_cv.notify_one();
+}
+
+void pcaDrive(PCA9685* pca, uint32_t L1, uint32_t L2, uint32_t R1, uint32_t R2, uint32_t ms)
+{
+  pca_sem.acquire();
+  pca->setPWM(DC_L1, L1);
+  pca->setPWM(DC_L2, L2);
+  pca->setPWM(DC_R1, R1);
+  pca->setPWM(DC_R2, R2);
+  pca_sem.release();
+  std::this_thread::sleep_for(std::chrono::milliseconds(ms));
+  pca_sem.acquire();
+  pca->setPWM(DC_L1, 0);
+  pca->setPWM(DC_L2, 0);
+  pca->setPWM(DC_R1, 0);
+  pca->setPWM(DC_R2, 0);
+  pca_sem.release();
+
+}
+
+
+void driveTrainThreadFunction(std::queue<char>* driveTrainQueue, PCA9685* pca) {
+
+  while (true) {
+    std::unique_lock lk(drive_lock);
+    drive_cv.wait(lk, [driveTrainQueue]{return !driveTrainQueue->empty();});
+    char dir = driveTrainQueue->front();
+    driveTrainQueue->pop();
+    lk.unlock();
+    drive_cv.notify_one();
+
+    switch(dir) {
+      case FORWARD:
+        pcaDrive(pca, L1_F, L2_F, R1_F, R2_F, ms_F);
+        break; 
+      case BACKWARD:
+        pcaDrive(pca, L1_B, L2_B, R1_B, R2_B, ms_B);
+        break;
+      case LEFT:
+        pcaDrive(pca, L1_L, L2_L, R1_L, R2_L, ms_L);
+        break;
+      case RIGHT:
+        pcaDrive(pca, L1_R, L2_R, R1_R, R2_R, ms_R);
+        break;
+      default:
+        pcaDrive(pca, 0, 0, 0, 0, 0);
+        break;
+    }
+
+    
+  }
+
+}
+
+
+
+void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) {
 
             char buffer[30000] = {0};
             size_t valread = read( new_socket , buffer, 30000);
@@ -456,6 +523,7 @@ void webServerThreadFunction(int new_socket) {
                 }
                 if (strcmp(parse_string, "/Forward?") ==0) {
                   cout << "drive forward " << endl;
+                    sendMove('f', driveTrainQueue);
                     char path_head[500] = ".";
                     strcat(path_head, "/index.html");
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
@@ -463,7 +531,8 @@ void webServerThreadFunction(int new_socket) {
                   //drive train forward
                 }
                 if (strcmp(parse_string, "/Backward?") ==0) {
-                  cout << "drive forward " << endl;
+                  cout << "drive backward" << endl;
+                    sendMove('b', driveTrainQueue);
                     char path_head[500] = ".";
                     strcat(path_head, "/index.html");
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
@@ -471,7 +540,8 @@ void webServerThreadFunction(int new_socket) {
                   //drive train forward
                 }
                 if (strcmp(parse_string, "/Left?") ==0) {
-                  cout << "drive forward " << endl;
+                  cout << "drive left " << endl;
+                    sendMove('l', driveTrainQueue);
                     char path_head[500] = ".";
                     strcat(path_head, "/index.html");
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
@@ -479,7 +549,8 @@ void webServerThreadFunction(int new_socket) {
                   //drive train forward
                 }
                 if (strcmp(parse_string, "/Right?") ==0) {
-                  cout << "drive forward " << endl;
+                  cout << "drive right " << endl;
+                    sendMove('r', driveTrainQueue);
                     char path_head[500] = ".";
                     strcat(path_head, "/index.html");
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
