@@ -46,9 +46,6 @@ using std::thread;
 #include "HIL.h"
 #endif
 
-#if PID_ENABLE
-#include "pid.h"
-#endif
 
 #include "KDTree.h"
 #if INV_ENABLE
@@ -71,14 +68,6 @@ void ekfThreadFunction();
 void pidThreadFunction(PCA9685* pca);
 void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue);
 void driveTrainThreadFunction(std::queue<char>* q, PCA9685* pca);
-/*
-std::condition_variable ekf_enable;
-std::mutex ekf_mutex;
-bool ekf_en = false;
-std::condition_variable pid_enable;
-std::mutex pid_mutex;
-bool pid_en = false;
-*/
 
 bool ekf_en = true;
 std::binary_semaphore pwm_sem{ekf_en};
@@ -93,7 +82,7 @@ vector<double> pwm_vec= vector<double>(3);
 int main(int argc, char const *argv[])
 {
   std::queue<char> driveTrainQueue;
-  PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); //TODO address
+  PCA9685 pca("/dev/i2c-1", SERVO_HAT_ADDRESS); 
     vector<thread> webServerThreads;
     int server_fd, new_socket, pid; 
     long valread;
@@ -175,25 +164,12 @@ vector<double> pwm_des(3,0);
 vector<double> pwm_meas(3,0);
     double pwm_set[3];
     double pwm_step[3];
-#if PID_ENABLE
-PIDController pid;
-float kp = .1;
-float ki = .2;
-float kd = .3;
-float lpf = 0.01f; //low pass filter coeff
-float max = 2.0f;
-float min = -max;
-//TODO accurate dt per loop
-PIDInit(&pid, kp, ki, kd, lpf, max, min);
-#endif
 #if SERVO_ENABLE
   pca->setPWM(1, 3500);
   pca->setPWM(2, 3500);
   pca->setPWM(3, 3500);
 #endif 
-auto T1 = Time::now();
   while (true) {
-#if PID_ENABLE
     //if disabled then non busy wait
     pid_enable.acquire();
     //get updated motor_angles
@@ -210,16 +186,12 @@ auto T1 = Time::now();
       pwm_meas[i] = pca.getPWM(i);
     }
     //This either needs to be before SERVO, or need to copy servo below
-    auto T2 = Time::now();
-    fsec fs = T2 - T1;
-    float dt = std::chrono::duration_cast<ms>(fs).count() * 1e-3;
     
     v3Subtract(pwm_des, pwm_meas, pwm_step);
     v3Scale(pwm_step, 1.0f/num_steps, pwm_step);
     for (int step=0; step<num_steps; step++) {
         
       for (int i=1; i<4; i++) {
-        //pca.setPWM( i, PIDUpdate(&pid, pwm_des[i], pwm_meas[i], dt));
         double p = pwm_meas[i] + pwm_step[i]*step;
         pca.setPWM(i, p );
         cout << "setting pwm " << p << endl;
@@ -227,8 +199,6 @@ auto T1 = Time::now();
       }
 
     }
-    T1 = T2;
-#endif
 #endif
 
     pid_enable.release();
@@ -495,7 +465,9 @@ void driveTrainThreadFunction(std::queue<char>* driveTrainQueue, PCA9685* pca) {
 
 
 void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) {
-
+            string html = "/index.html";
+            string html_start = "/index_start.html";
+            std::string* fname; 
             char buffer[30000] = {0};
             size_t valread = read( new_socket , buffer, 30000);
 
@@ -517,7 +489,7 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                 if(strlen(parse_string) <= 1){
                     //case that the parse_string = "/"  --> Send index.html file
                     char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
                     send_message(new_socket, path_head, copy_head);
                 }
@@ -525,7 +497,7 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                   cout << "drive forward " << endl;
                     sendMove('f', driveTrainQueue);
                     char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
                     send_message(new_socket, path_head, copy_head);
                   //drive train forward
@@ -534,7 +506,7 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                   cout << "drive backward" << endl;
                     sendMove('b', driveTrainQueue);
                     char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
                     send_message(new_socket, path_head, copy_head);
                   //drive train forward
@@ -543,7 +515,7 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                   cout << "drive left " << endl;
                     sendMove('l', driveTrainQueue);
                     char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
                     send_message(new_socket, path_head, copy_head);
                   //drive train forward
@@ -552,7 +524,7 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                   cout << "drive right " << endl;
                     sendMove('r', driveTrainQueue);
                     char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
                     send_message(new_socket, path_head, copy_head);
                   //drive train forward
@@ -560,15 +532,15 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                 else if (strcmp(parse_string, "/Stop?") ==0 ) {
                   cout << "enable compensation " << endl;
                   //enable ekf/pid control
-                  //create new thread
                   if (ekf_en) {
 		    cout << "stopping ekf " << endl;
                     ekf_enable.acquire();
                     pid_enable.acquire();
                     ekf_en^=1;
+                    fname = &html_start;
                     char path_head[500] = ".";
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    strcat(path_head, "/index_start.html");
+                    strcat(path_head, fname->c_str());
                     send_message(new_socket, path_head, copy_head);
                    
                   }
@@ -577,9 +549,10 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                     ekf_enable.release();
                     pid_enable.release();
                     ekf_en^=1;
+                    fname = &html;
                     char path_head[500] = ".";
                     strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    strcat(path_head, "/index.html");
+                    strcat(path_head, fname->c_str());
                     send_message(new_socket, path_head, copy_head);
                 }
                 }
@@ -594,20 +567,12 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
                 char *find_string = (char*)malloc(200);
                 find_string = find_token(buffer, "\r\n", "action");
                 strcat(copy_head, "Content-Type: text/plain \r\n\r\n"); //\r\n\r\n
-                //strcat(copy_head, "Content-Length: 12 \n");
                 strcat(copy_head, "User Action: ");
                 printf("find string: %s \n", find_string);
                 strcat(copy_head, find_string);
                 write(new_socket, copy_head, strlen(copy_head));
             }
-	    /*cout << "not get or post " << parse_string_method << endl;
-	    cout << "not get or post " << parse_string << endl;
-	char path_head[500] = ".";
-                    strcat(path_head, "/index.html");
-                    strcat(copy_head, "Content-Type: text/html\r\n\r\n");
-                    send_message(new_socket, path_head, copy_head);
-	    */
-            close(new_socket);
+           close(new_socket);
             free(copy);
             free(copy_head);  
 
