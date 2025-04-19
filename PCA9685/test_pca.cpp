@@ -35,9 +35,11 @@ int main(int argc, char* argv[])
   bool angles = false;
   bool drive = false;
   if (argc == 3) {
-    angles = argv[2]=="a";
-    drive = argv[2]=="d";
-    cout << "using inverse kinematics (deg)" << endl;
+    angles = true;
+    //drive = argv[2]=="d";
+  }
+  if (argc == 4) {
+	drive = true;
   }
     double servoAngles[] = {0,0,0};
     PCA9685 pca(argv[1], ADDRESS);
@@ -64,10 +66,12 @@ int main(int argc, char* argv[])
       else if (angles) {
         inverseKinematics(std::stoi(value), std::stoi(value2), servoAngles);
         cout << "setting pwm " << anglesToPwm(servoAngles[0]) << " " << anglesToPwm(servoAngles[1]) << " " << anglesToPwm(servoAngles[2]) << endl;
-        pca.setPWM(1, anglesToPwm(servoAngles[0]));
+        
+	
+	pca.setPWM(1, anglesToPwm(servoAngles[0]));
         pca.setPWM(2, anglesToPwm(servoAngles[1]));
         pca.setPWM(3, anglesToPwm(servoAngles[2]));
-      }else {
+     }else {
         cout<< "setting pwm: " << led << " to: " << value << endl;
         pca.setPWM(std::stoi(led), std::stoi(value));
       }
@@ -81,4 +85,5 @@ int main(int argc, char* argv[])
   }
 
 }
+
 

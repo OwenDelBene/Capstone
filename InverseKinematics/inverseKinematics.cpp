@@ -70,7 +70,7 @@ void inverseKinematics(double roll, double pitch, double servoAngles[3]) {
 
   double rb_nY[3], rb_pY[3], rb_X[3];
 
-  v3Set(224.4, 0, 0, rb_X);
+  v3Set(210.57, 0, 0, rb_X);
 
   threeRot(RA, -4 * M_PI/3.0f);
   mMultV(RA, 3, 3, rb_X, rb_nY);
