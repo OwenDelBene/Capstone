@@ -345,10 +345,12 @@ void ekf_init(ekfData* ekf, double x[7], double P[7][7])
 {
   double Qv[] = {1e-6, 1e-6, 1e-6, 1e-5, 1e-5, 1e-5, 1e-5};
   double Rv[] = {.045, .045, .045, .015, .015, .015};
-  double MOI[] = {1.0, 1.0, 1.0};
   mDiag(Qv, 7, ekf->Q);
   mDiag(Rv, 6, ekf->R);
-  mDiag(MOI, 3, ekf->MOI);
+  m33Set(698.75, 51.24, 2.08,
+         51.24, 1043.51, .11,
+         2.08, .11, 649.06, ekf->MOI);
+  m33Scale(.00064516 * 1.0/2.2, ekf->MOI, ekf->MOI);
   mInverse(ekf->MOI, 3, ekf->MOI_inv);
   double a = (.5 * M_PI/180);
   a*=a * 10;

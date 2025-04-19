@@ -467,7 +467,7 @@ void driveTrainThreadFunction(std::queue<char>* driveTrainQueue, PCA9685* pca) {
 void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) {
             string html = "/index.html";
             string html_start = "/index_start.html";
-            std::string* fname; 
+            std::string* fname = &html; 
             char buffer[30000] = {0};
             size_t valread = read( new_socket , buffer, 30000);
 
