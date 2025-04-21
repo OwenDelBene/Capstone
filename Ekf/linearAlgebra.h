@@ -259,6 +259,7 @@ extern "C" {
   void eul2Quat(double roll, double pitch, double yaw, double q[4]); 
   void quatConj(double q[4], double conj[4]);
   void quatMultiply(double q1[4], double q2[4], double qout[4]);
+  double capAngle(double angle, double cap);
 #ifdef __cplusplus
 }
 #endif

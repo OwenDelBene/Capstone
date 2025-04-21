@@ -2995,5 +2995,15 @@ void quatMultiply(double p[4], double q[4], double qout[4]) {
 }
 
 
+double capAngle(double angle, double cap) {
+  if (angle > cap) {
+    return angle - cap;
+  }
+  if (angle < -cap) {
+    if (angle < 0) return angle + cap;
+  }
+  return angle;
+
+}
 
 

@@ -69,7 +69,7 @@ void pidThreadFunction(PCA9685* pca);
 void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue);
 void driveTrainThreadFunction(std::queue<char>* q, PCA9685* pca);
 
-bool ekf_en = true;
+bool ekf_en = false;
 std::binary_semaphore pwm_sem{ekf_en};
 std::binary_semaphore pca_sem{ekf_en};
 std::binary_semaphore ekf_enable{ekf_en};
@@ -183,7 +183,7 @@ vector<double> pwm_meas(3,0);
     //pid to desired pwm
 #if SERVO_ENABLE
     for (int i=1; i<4; i++) {
-      pwm_meas[i-1] = pca.getPWM(i);
+      pwm_meas[i-1] = pca->getPWM(i);
     }
     //This either needs to be before SERVO, or need to copy servo below
     int num_steps = PID_STEPS;
@@ -193,7 +193,7 @@ vector<double> pwm_meas(3,0);
         
       for (int i=1; i<4; i++) {
         double p = pwm_meas[i-1] + pwm_step[i-1]*step;
-        pca.setPWM(i, p );
+        pca->setPWM(i, p );
         cout << "setting pwm " << p << endl;
         
       }
@@ -277,7 +277,10 @@ void ekfThreadFunction() {
 #endif
   quat2Eul(x.data(), eul.data());
 #if INV_ENABLE
-  inverseKinematics(eul[0] * 180.0f/M_PI + 180.0f, -eul[1]*180.0f/M_PI, inv.data());
+  eul[0] =  capAngle(eul[0] * 180.0f/M_PI + 180.0f, 180);
+  eul[1] = capAngle(-eul[1] * 180.0f/M_PI, 180);
+  
+  inverseKinematics(eul[0] , eul[1], inv.data());
   for (int i=0; i<3; i++) {
     pwm_des[i] = anglesToPwm(inv[i]);
     cout << "ekf pwm_des " << pwm_des[i] << "inverse kinematics " << inv[i] << endl;
@@ -292,7 +295,7 @@ std::thread::id threadId = std::this_thread::get_id();
   std::stringstream ss;
   ss << threadId;
   std::string threadIdString = ss.str();
-  cout << "ekf iteration: roll" << eul[0] * 180.0f/M_PI  + 180.0f << " pitch " << eul[1]*180.0f/M_PI  << endl;
+  cout << "ekf iteration: roll" << eul[0]  << " pitch " << eul[1]  << endl;
   ekf_enable.release();
   std::this_thread::sleep_for(std::chrono::milliseconds(EKF_PERIOD));
   }
