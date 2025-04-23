@@ -6,8 +6,8 @@
 #define MIN_ANGLE -80
 #define MAX_ANGLE 60
 
-#define MIN_PWM 3250
-#define MAX_PWM 2000
+#define MIN_PWM 3500
+#define MAX_PWM 2100
 
 uint32_t anglesToPwm(double angle)
 {
@@ -115,8 +115,4 @@ void inverseKinematics(double roll, double pitch, double servoAngles[3]) {
   servoAngles[2] =90 -  (alpha_X + beta_X - M_PI/2) * rad2deg;
 
 }
-
-
-
-
 

@@ -27,7 +27,7 @@ typedef std::chrono::duration<float> fsec;
 using std::vector;
 using std::thread;
 
-#define PID_STEPS    15
+#define PID_STEPS    25
 #define PID_PERIOD  100 
 #define EKF_PERIOD   50
 
@@ -69,7 +69,7 @@ void pidThreadFunction(PCA9685* pca);
 void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue);
 void driveTrainThreadFunction(std::queue<char>* q, PCA9685* pca);
 
-bool ekf_en = false;
+bool ekf_en = true;
 std::binary_semaphore pwm_sem{ekf_en};
 std::binary_semaphore pca_sem{ekf_en};
 std::binary_semaphore ekf_enable{ekf_en};
@@ -277,10 +277,10 @@ void ekfThreadFunction() {
 #endif
   quat2Eul(x.data(), eul.data());
 #if INV_ENABLE
-  eul[0] =  capAngle(eul[0] * 180.0f/M_PI + 180.0f, 180);
-  eul[1] = capAngle(-eul[1] * 180.0f/M_PI, 180);
+  eul[0] =  (-eul[0] * 180.0f/M_PI  + 180.0f);
+  eul[1] = (-eul[1] * 180.0f/M_PI);
   
-  inverseKinematics(eul[0] , eul[1], inv.data());
+  inverseKinematics(-eul[0] , eul[1], inv.data());
   for (int i=0; i<3; i++) {
     pwm_des[i] = anglesToPwm(inv[i]);
     cout << "ekf pwm_des " << pwm_des[i] << "inverse kinematics " << inv[i] << endl;
@@ -441,7 +441,7 @@ void driveTrainThreadFunction(std::queue<char>* driveTrainQueue, PCA9685* pca) {
     driveTrainQueue->pop();
     lk.unlock();
     drive_cv.notify_one();
-
+	cout << "trying to drive "<< endl;
     switch(dir) {
       case FORWARD:
         pcaDrive(pca, L1_F, L2_F, R1_F, R2_F, ms_F);
@@ -580,3 +580,4 @@ void webServerThreadFunction(int new_socket, std::queue<char>* driveTrainQueue) 
             free(copy_head);  
 
 }
+
